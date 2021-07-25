@@ -1,28 +1,31 @@
+//external imports
 const express = require("express");
 const http = require("http");
 const socketIO = require("socket.io");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const { addUser, removeUser, getUserById, getRoomUsers } = require("./users");
-require("dotenv").config();
 const { MongoClient } = require("mongodb");
+
+//internal imports
+const { addUser, removeUser, getUserById, getRoomUsers } = require("./users");
+const port = process.env.PORT || 4000;
+
+const app = express();
+require("dotenv").config();
+
+//database connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nlclv.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
 
-const port = process.env.PORT || 4000;
-const app = express();
-
+//middlewars
 app.use(cors());
 app.use(bodyParser.json());
 // app.use(bodyParser.urlencoded({
 //   extended: true
 // }));
-
-const httpServer = http.createServer(app);
-const io = socketIO(httpServer);
 
 app.get("/", (req, res) => res.send("Hello World!"));
 
@@ -35,11 +38,11 @@ client.connect((err) => {
     const email = req.body.email;
     const role = req.body.role;
     userCollection.find({ email: email }).toArray((err, users) => {
-      if(users && users.length == 0) {
+      if (users && users.length == 0) {
         userCollection
           .insertOne({ name, userName, email, role })
           .then((result) => {
-            console.log(result);
+            // console.log(result);
             res.send(result.acknowledged);
           });
       }
@@ -49,11 +52,14 @@ client.connect((err) => {
   app.post("/getFullUserByEmail", (req, res) => {
     const email = req.body.email;
     userCollection.find({ email: email }).toArray((err, user) => {
-      if(user && user.length > 0) {
+      if (user && user.length > 0) {
         res.send(user);
-      }
-      else{
-        console.log('user not found, server side error -getFullUserByEmail', user, email)
+      } else {
+        console.log(
+          "user not found, server side error -getFullUserByEmail",
+          user,
+          email
+        );
       }
     });
   });
@@ -61,19 +67,36 @@ client.connect((err) => {
   app.post("/isUserNameExist", (req, res) => {
     const userName = req.body.userName;
     userCollection.find({ userName: userName }).toArray((err, user) => {
-      if(!err){
-        if(user && user.length > 0) {
-          console.log(userName)
-          // user name exist, so we have to use another username, thats why se.send is false
-          res.send(false);
-        }
-        else{
-          console.log(userName,user,'true')
+      if (!err) {
+        if (user && user.length > 0) {
           res.send(true);
+        } else {
+          res.send(false);
         }
       }
     });
   });
+
+  app.post("/updateProfile", (req, res) => {
+    const email = req.body.email;
+    const profile = req.body.profile;
+    userCollection.updateOne({ email: email }, {$set:{profile: profile}})
+    .then(response => {
+      res.send(response)
+    })
+    .catch(err =>console.log(err))
+  });
+
+  app.post("/updateUserName", (req, res) => {
+    const email = req.body.email;
+    const userName = req.body.userName; 
+    userCollection.updateOne({ email: email }, {$set:{userName: userName}})
+    .then(response => {
+      res.send(response)
+    })
+    .catch(err =>console.log(err))
+  });
+
 
   console.log("database connected successfully");
   //   client.close();
@@ -81,9 +104,9 @@ client.connect((err) => {
 
 
 
-
-
 // chat application part
+const httpServer = http.createServer(app);
+const io = socketIO(httpServer);
 io.on("connection", (socket) => {
   console.log("a user connected ", socket.id);
 
