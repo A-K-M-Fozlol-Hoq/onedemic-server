@@ -16,9 +16,14 @@ require("dotenv").config();
 
 //database connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nlclv.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
+// const client = new MongoClient(uri, { useUnifiedTopology: true}, { useNewUrlParser: true }, { connectTimeoutMS: 30000 }, { keepAlive: 1});
 const client = new MongoClient(uri, {
-  useNewUrlParser: true,
+  useNewUrlParser: true, 
   useUnifiedTopology: true,
+  // useNewUrlParser: true,
+  // useUnifiedTopology: true,
+  // connectTimeoutMS: 3000, 
+  // keepAlive: 1,
 });
 
 //middlewars
@@ -32,7 +37,7 @@ app.use(fileUpload());
 app.get("/", (req, res) => res.send("Hello World!"));
 
 client.connect((err) => {
-  const userCollection = client.db("onedemic").collection("usersLoginData");
+  const userCollection = client.db("onedemic").collection("usersData");
   const courseCollection = client.db("onedemic").collection("courseCollection");
 
   app.post("/addUser", (req, res) => {
@@ -62,7 +67,8 @@ client.connect((err) => {
         console.log(
           "user not found, server side error -getFullUserByEmail",
           user,
-          email
+          email,
+          err
         );
       }
     });
@@ -104,9 +110,9 @@ client.connect((err) => {
   });
   app.post("/isCourseCodeExist", (req, res) => {
     const courseCode = req.body.courseCode;
-    courseCollection.find({ courseCode: courseCode }).toArray((err, user) => {
+    courseCollection.find({ courseCode: courseCode }).toArray((err, course) => {
       if (!err) {
-        if (user && user.length > 0) {
+        if (course && course.length > 0) {
           res.send(true);
         } else {
           res.send(false);
@@ -131,7 +137,7 @@ client.connect((err) => {
     };
     // console.log(file,courseCode, courseName, email, image);
     courseCollection
-      .insertOne({ courseName, courseCode,students, image })
+      .insertOne({ courseName, courseCode, students, image })
       .then((result) => {
         // console.log(result);
         if (result.acknowledged) {
@@ -151,8 +157,70 @@ client.connect((err) => {
       });
   });
 
+  app.post("/joinCourse", (req, res) => {
+    const email = req.body.email;
+    const courseCode = req.body.courseCode;
+    const name = req.body.name;
+    courseCollection.find({ courseCode: courseCode }).toArray((err, course) => {
+      if (!err) {
+        if (course && course.length > 0) {
+          const courseName= course[0].courseName;
+          const courseCode= course[0].courseCode;
+          const image= course[0].image;
+          userCollection.find({ email: email }).toArray((err, user) => {
+            if(!err && user && user.length > 0){
+              let alreadyJoined = false;
+              user[0].courses.map( course => {
+                if(course.courseCode === courseCode){
+                  alreadyJoined=true;
+                }
+              })
+                if(! alreadyJoined){
+                  userCollection
+                  .updateOne(
+                    { email: email },
+                    { $push: { courses: { courseName, courseCode, image } } }
+                  )
+                  .then((response) => {
+                    
+                    courseCollection
+                    .updateOne(
+                      { courseCode: courseCode },
+                      { $push: { students: { email, name } } }
+                    )
+                    .then((response) => {
+                      if (response.modifiedCount === 1) {
+                        res.send({'msg':`Congratulations! You have Enrolled ${courseName} course successfully.`}); 
+                      }
+                    })
+                    .catch((err) => res.send({'msg':'Server error! Please try again...'}));
+                  })
+                  .catch((err) => res.send({'msg':'Server error! Please try again...'}));
+                }else{
+                res.send({'msg':'You have already joined in this course'});
+              }
+            }
+          });
+        } else {
+          res.send({'msg':'Course not found, Please use right code.'})
+        }
+      } else {
+        res.send({'msg':'Server error! Please try again...'})
+      }
+    });
+  });
+
+  app.post("/getFullCourseByCourseCode", (req, res) => {
+    const courseCode = req.body.courseCode;
+    courseCollection.find({ courseCode: courseCode }).toArray((err, course) => {
+      if (course && course.length > 0) {
+        res.send(course);
+      }
+    });
+  });
+
   console.log("database connected successfully");
-  //   client.close();
+    // client.close();
 });
 
 // chat application part
@@ -211,3 +279,6 @@ io.on("connection", (socket) => {
 httpServer.listen(port, () =>
   console.log(`Example app listening at http://localhost:${port}`)
 );
+// app.listen(port, () =>
+//   console.log(`Example app listening at http://localhost:${port}`)
+// );
