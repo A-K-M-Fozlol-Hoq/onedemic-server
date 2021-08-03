@@ -22,7 +22,7 @@ const client = new MongoClient(uri, {
   useUnifiedTopology: true,
   // useNewUrlParser: true,
   // useUnifiedTopology: true,
-  // connectTimeoutMS: 3000, 
+  connectTimeoutMS: 30000, 
   // keepAlive: 1,
 });
 
@@ -176,13 +176,26 @@ client.connect((err) => {
                 }
               })
                 if(! alreadyJoined){
-                  userCollection
+                  let isBlocked = false;
+                  courseCollection.find({ courseCode: courseCode }).toArray((err, user) => {
+                    if(!err && course && course.length > 0){
+                      course[0].blockList.map( list => {
+                        if(list.email === email){
+                          isBlocked=true;
+                        }
+                      })
+                    }
+                  })
+                  if(isBlocked){
+                    res.send({'msg':'Relax! Contact with your teacher'})
+                  }
+                  else{
+                    userCollection
                   .updateOne(
                     { email: email },
                     { $push: { courses: { courseName, courseCode, image } } }
                   )
                   .then((response) => {
-                    
                     courseCollection
                     .updateOne(
                       { courseCode: courseCode },
@@ -196,6 +209,7 @@ client.connect((err) => {
                     .catch((err) => res.send({'msg':'Server error! Please try again...'}));
                   })
                   .catch((err) => res.send({'msg':'Server error! Please try again...'}));
+                  }
                 }else{
                 res.send({'msg':'You have already joined in this course'});
               }
@@ -219,6 +233,90 @@ client.connect((err) => {
     });
   });
 
+  app.post("/removeStudentsFromCourse", (req, res) => {
+    const email = req.body.email;
+    const courseCode = req.body.courseCode;
+    const haveToBlock = req.body.haveToBlock;
+    userCollection
+      .findOneAndUpdate(
+        { email: email },
+        { $pull: { courses: { courseCode } } }
+      )
+      .then((response) => {
+        courseCollection
+        .findOneAndUpdate(
+          { courseCode: courseCode },
+          { $pull: { students: { email } } }
+        )
+        .then((response) => {
+            if(haveToBlock){
+              courseCollection
+                .updateOne(
+                  { courseCode: courseCode },
+                  { $push: { blockList: { email, email } } }
+                 )
+                .then((response) => {
+                   if (response.modifiedCount === 1) {
+                    res.send({'msg':`Congratulations! You have Enrolled ${courseName} course successfully.`}); 
+                   }
+                })
+                .catch((err) => res.send({'msg':'Server error! Please try again...'}));
+            }
+            else{
+              res.send({'removed':true}); 
+            }
+        })
+        .catch((err) => res.send({'removed':false}));
+      })
+        .catch((err) =>{
+          console.log(err)
+          res.send({'removed':false})
+        });
+
+// Another way to do this
+// senerio:
+    // --
+    // {
+    //   _id : '123'
+    //   friends: [
+    //     {name: 'allen', emails: [
+    //        {email: '11111', using: 'true'}
+    //     ]},
+    //     {name: 'lucy' , emails: [
+    //        {email: 'lucy@work.com', using:'true'}, 
+    //        {email:'lucyGucy@zmail.com', using : 'false'}
+    //     ]}
+    //   ]
+    // }
+    // --
+// code:
+  //   --
+  //   userCollection.update({courseCode:courseCode}, {$pull:{
+  //     "friends.$[updateFriend].emails.$[updateEmail].email : "lucy.is.gucy@zmail.com"
+  // }}, {
+  //     "arrayFilters": [
+  //       {"updateFriend.name" : "lucy"},
+  //       {"updateEmail.email" : "lucyGucy@zmail.com"}
+  //     ]
+  // })
+  //   --
+  })
+  app.post("/removeFromBlockList", (req, res) => {
+    const email = req.body.email;
+    const courseCode = req.body.courseCode;
+    courseCollection
+      .findOneAndUpdate(
+        { courseCode: courseCode },
+        { $pull: { blockList: { email } } }
+      )
+      .then((response) => {
+        res.send({'unblocked':true})
+      })
+      .catch((error) => {
+        res.send({'unblocked':false})
+      })
+  });
+  
   console.log("database connected successfully");
     // client.close();
 });
