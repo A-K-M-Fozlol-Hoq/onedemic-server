@@ -180,36 +180,39 @@ client.connect((err) => {
                   courseCollection.find({ courseCode: courseCode }).toArray((err, user) => {
                     if(!err && course && course.length > 0){
                       course[0].blockList.map( list => {
+                        console.log(list.email,email,'-------')
                         if(list.email === email){
                           isBlocked=true;
+                          // console.log(isBlocked,'======186')
                         }
                       })
+                      // console.log(isBlocked,'======191')
+                      if(isBlocked){
+                        res.send({'msg':'Relax! Try to contact with your teacher'})
+                      }
+                      else{
+                        userCollection
+                      .updateOne(
+                        { email: email },
+                        { $push: { courses: { courseName, courseCode, image } } }
+                      )
+                      .then((response) => {
+                        courseCollection
+                        .updateOne(
+                          { courseCode: courseCode },
+                          { $push: { students: { email, name } } }
+                        )
+                        .then((response) => {
+                          if (response.modifiedCount === 1) {
+                            res.send({'msg':`Congratulations! You have Enrolled ${courseName} course successfully.`}); 
+                          }
+                        })
+                        .catch((err) => res.send({'msg':'Server error! Please try again...'}));
+                      })
+                      .catch((err) => res.send({'msg':'Server error! Please try again...'}));
+                      }
                     }
                   })
-                  if(isBlocked){
-                    res.send({'msg':'Relax! Contact with your teacher'})
-                  }
-                  else{
-                    userCollection
-                  .updateOne(
-                    { email: email },
-                    { $push: { courses: { courseName, courseCode, image } } }
-                  )
-                  .then((response) => {
-                    courseCollection
-                    .updateOne(
-                      { courseCode: courseCode },
-                      { $push: { students: { email, name } } }
-                    )
-                    .then((response) => {
-                      if (response.modifiedCount === 1) {
-                        res.send({'msg':`Congratulations! You have Enrolled ${courseName} course successfully.`}); 
-                      }
-                    })
-                    .catch((err) => res.send({'msg':'Server error! Please try again...'}));
-                  })
-                  .catch((err) => res.send({'msg':'Server error! Please try again...'}));
-                  }
                 }else{
                 res.send({'msg':'You have already joined in this course'});
               }
@@ -301,6 +304,7 @@ client.connect((err) => {
   // })
   //   --
   })
+
   app.post("/removeFromBlockList", (req, res) => {
     const email = req.body.email;
     const courseCode = req.body.courseCode;
