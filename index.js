@@ -179,12 +179,14 @@ client.connect((err) => {
                   let isBlocked = false;
                   courseCollection.find({ courseCode: courseCode }).toArray((err, user) => {
                     if(!err && course && course.length > 0){
+                     if( course[0].blockList){
                       course[0].blockList.map( list => {
                         if(list.email === email){
                           isBlocked=true;
                           // console.log(isBlocked,'======186')
                         }
                       })
+                     }
                       // console.log(isBlocked,'======191')
                       if(isBlocked){
                         res.send({'msg':'Relax! Try to contact with your teacher'})
@@ -328,7 +330,7 @@ client.connect((err) => {
 const httpServer = http.createServer(app);
 const io = socketIO(httpServer);
 io.on("connection", (socket) => {
-  console.log("a user connected ", socket.id);
+  // console.log("a user connected ", socket.id);
 
   socket.on("join", ({ name, room }, callback) => {
     const { error, user } = addUser({ id: socket.id, name, room });
@@ -356,10 +358,12 @@ io.on("connection", (socket) => {
   socket.on("message", (message) => {
     const user = getUserById(socket.id);
 
-    io.to(user.room).emit("message", {
-      user: user.name,
-      text: message,
-    });
+    if(user){
+      io.to(user.room).emit("message", {
+        user: user.name,
+        text: message,
+      });
+    }
   });
 
   socket.on("disconnect", () => {
