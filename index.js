@@ -180,7 +180,6 @@ client.connect((err) => {
                   courseCollection.find({ courseCode: courseCode }).toArray((err, user) => {
                     if(!err && course && course.length > 0){
                       course[0].blockList.map( list => {
-                        console.log(list.email,email,'-------')
                         if(list.email === email){
                           isBlocked=true;
                           // console.log(isBlocked,'======186')
