@@ -23,13 +23,17 @@ const client = new MongoClient(uri, {
   // useNewUrlParser: true,
   // useUnifiedTopology: true,
   connectTimeoutMS: 30000, 
-  // keepAlive: 1,
+  keepAlive: 1,
 });
 
 //middlewars
 app.use(cors());
 app.use(bodyParser.json());
 app.use(fileUpload());
+// app.use((req, res, next) => {
+//   res.header({"Access-Control-Allow-Origin": "*"});
+//   next();
+// }) 
 // app.use(bodyParser.urlencoded({
 //   extended: true
 // }));
@@ -39,6 +43,9 @@ app.get("/", (req, res) => res.send("Hello World!"));
 client.connect((err) => {
   const userCollection = client.db("onedemic").collection("usersData");
   const courseCollection = client.db("onedemic").collection("courseCollection");
+  const examCollection = client.db("onedemic").collection("examCollection");
+  const pdfColletion = client.db("onedemic").collection("pdfColletion");
+  const resultCollection = client.db("onedemic").collection("resultCollection");
 
   app.post("/addUser", (req, res) => {
     const name = req.body.name;
@@ -108,6 +115,7 @@ client.connect((err) => {
       })
       .catch((err) => console.log(err));
   });
+  
   app.post("/isCourseCodeExist", (req, res) => {
     const courseCode = req.body.courseCode;
     courseCollection.find({ courseCode: courseCode }).toArray((err, course) => {
@@ -321,6 +329,256 @@ client.connect((err) => {
         res.send({'unblocked':false})
       })
   });
+
+  app.post("/createMCQExam", (req, res) => {
+    const examName = req.body.examName;
+    const course = req.body.course;
+    const date = req.body.date;
+    const startTime = req.body.startTime;
+    const endTime = req.body.endTime;
+    const examType = req.body.examType;
+    const questions = req.body.questions;
+    // console.log(course, date, startTime, examName, endTime, examType, questions)
+    examCollection
+      .insertOne({ course, date, startTime, examName, endTime, examType, questions})
+      .then((result) => {
+        console.log(result);
+        if (result.acknowledged) {
+          res.send(true)
+        }
+        else{
+          res.send(false)
+        }
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  });
+  
+  app.post("/createWrittenExam", (req, res) => {
+    const examName = req.body.examName;
+    const course = req.body.course;
+    const date = req.body.date;
+    const startTime = req.body.startTime;
+    const endTime = req.body.endTime;
+    const examType = req.body.examType;
+
+    const file = req.files.file;
+    const newPDF = file.data;
+    const encPDF = newPDF.toString("base64");
+    
+    var pdfFile = {
+      contentType: file.mimetype,
+      size: file.size,
+      pdf: Buffer.from(encPDF, "base64"),
+    };
+    // console.log(course, date, startTime, examName, endTime, examType)
+    examCollection
+      .insertOne({ course, date, startTime, examName, endTime, examType, pdfFile})
+      .then((result) => {
+        console.log(result);
+        if (result.acknowledged) {
+          res.send(true)
+        }
+        else{
+          res.send(false)
+        }
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  });
+
+  app.post("/getExamCollection", (req, res) => {
+    let courses = req.body.courses;
+    courses = JSON.parse(courses);
+    let returnArray=[];
+    let length = courses.length;
+    let index=0;
+    for (let i = 0; i < courses.length; i++) {
+      let course = courses[i];
+      course = JSON.stringify(course)
+      examCollection.find({ course: course }).toArray((err, exam) => {
+            if (!err) {
+              index = index + 1;
+              if (exam && exam.length > 0) {
+                // console.log(exam)
+                // console.log(res,exam)
+                returnArray.push(exam);
+                console.log(length,index)
+              } else {
+                console.log(exam)
+                console.log(length,index)
+              }
+              if(length === index){
+                console.log('ok')
+                res.send(returnArray)
+              }
+            }
+          });
+    }
+  });
+
+  app.post("/storeMCQResult", (req, res) => {
+    const courseCode = req.body.courseCode;
+    const email = req.body.email;
+    const marks = req.body.marks;
+    const examName = req.body.examName;
+    resultCollection.find({courseCode:courseCode }).toArray((err, course) => {
+      if(!err){
+        if(course.length === 0){
+          resultCollection
+          .insertOne(
+            { courseCode: courseCode }
+          )
+          .then((response) => {
+            resultCollection
+            .updateOne(
+              { courseCode: courseCode },
+              { $push: { results: { email, marks, examName } } }
+            )
+            .then((response) => {
+              res.send(response);
+            })
+            .catch((err) => console.log(err));
+          })
+          .catch((err) => console.log(err));
+        }
+        else{
+          resultCollection
+          .updateOne(
+            { courseCode: courseCode },
+            { $push: { results: { email, marks, examName } } }
+          )
+          .then((response) => {
+            res.send(response);
+          })
+          .catch((err) => console.log(err));
+        }
+      }
+    });
+  });
+
+  app.post("/storeWrittenesult", (req, res) => {
+    const courseCode = req.body.courseCode;
+    const email = req.body.email;
+    const marks = req.body.marks;
+    const examName = req.body.examName;
+    const pdfCode = req.body.pdfCode;
+    resultCollection.find({courseCode:courseCode }).toArray((err, course) => {
+      if(!err){
+        if(course.length === 0){
+          resultCollection
+          .insertOne(
+            { courseCode: courseCode }
+          )
+          .then((response) => {
+            resultCollection
+            .updateOne(
+              { courseCode: courseCode },
+              { $push: { results: { email, marks, examName,pdfCode } } }
+            )
+            .then((response) => {
+              res.send(response);
+            })
+            .catch((err) => console.log(err));
+          })
+          .catch((err) => console.log(err));
+        }
+        else{
+          resultCollection
+          .updateOne(
+            { courseCode: courseCode },
+            { $push: { results: { email, marks, examName,pdfCode } } }
+          )
+          .then((response) => {
+            res.send(response);
+          })
+          .catch((err) => console.log(err));
+              }
+            }
+          });
+  });
+
+  app.post("/storePDF", (req, res) => {
+    const pdfCode = req.body.pdfCode;
+        const file = req.files.file;
+        const newPDF = file.data;
+        const encPDF = newPDF.toString("base64");
+    
+        var pdfFile = {
+          contentType: file.mimetype,
+          size: file.size,
+          pdf: Buffer.from(encPDF, "base64"),
+        };
+        
+        pdfColletion
+          .insertOne({ pdfCode,pdfFile })
+          .then((result) => {
+            console.log(result);
+          })
+          .catch((err) => {
+            console.log(err);
+          });
+  });
+
+  app.post("/getResults", (req, res) => {
+        const courseCode = req.body.courseCode;
+        resultCollection.find({courseCode:courseCode }).toArray((err, result) => {
+          if(!err){
+            if(result && result.length>0){
+              res.send(result[0].results)
+            }
+            else{
+              res.send(false)
+            }
+          }
+        });
+  });
+
+  app.post("/getOnesResults", (req, res) => {
+        const courseCode = req.body.courseCode;
+        const email = req.body.email;
+        console.log(courseCode,email);
+        resultCollection.find({courseCode:courseCode }).toArray((err, results) => {
+          let array=[];
+          if(!err){
+            if(results && results.length>0){
+              results[0].results.map((result) => {
+                if(result.email ===email){
+                  array.push(result)
+                }
+              })
+              if(array.length >0){
+                res.send(array);
+              }
+              else{
+                res.send(false)
+              }
+            }
+            else{
+              res.send(false)
+            }
+          }
+        });
+  });
+
+  app.post("/getPDF", (req, res) => {
+        const pdfCode = req.body.pdfCode;
+        pdfColletion.find({pdfCode:pdfCode }).toArray((err, pdf) => {
+          if(!err){
+            res.send(pdf)
+            // if(pdf && result.pdf>0){
+            //   res.send(pdf)
+            // }
+            // else{
+            //   res.send(false)
+            // }
+          }
+        });
+  });
+
+  
   
   console.log("database connected successfully");
     // client.close();
