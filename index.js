@@ -579,7 +579,6 @@ client.connect((err) => {
   });
 
   
-  
   console.log("database connected successfully");
     // client.close();
 });
