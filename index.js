@@ -269,7 +269,7 @@ client.connect((err) => {
                  )
                 .then((response) => {
                    if (response.modifiedCount === 1) {
-                    res.send({'msg':`Congratulations! You have Enrolled ${courseName} course successfully.`}); 
+                    res.send({'msg':`Congratulations! You have Successfully removed ${email} from the course successfully.`});  
                    }
                 })
                 .catch((err) => res.send({'msg':'Server error! Please try again...'}));
@@ -587,55 +587,52 @@ client.connect((err) => {
 const httpServer = http.createServer(app);
 const io = socketIO(httpServer);
 io.on("connection", (socket) => {
-  // console.log("a user connected ", socket.id);
 
-  socket.on("join", ({ name, room }, callback) => {
-    const { error, user } = addUser({ id: socket.id, name, room });
-    if (error) {
-      callback(error);
-    }
+socket.on("join", ({ name, room }, callback) => {
+  const { error, user } = addUser({ id: socket.id, name, room });
+  if (error) {
+    callback(error);
+  }
 
-    socket.join(room);
-    socket.emit("message", {
+  socket.join(room);
+  socket.emit("message", {
+    user: "System",
+    text: `welcome ${name} to ${room}.`,
+  });
+
+  socket.broadcast.to(room).emit("message", {
+    user: "System",
+    text: `${name} just joined ${room}.`,
+  });
+
+  const roomUsers = getRoomUsers(room);
+  io.to(room).emit("userList", { roomUsers });
+
+  callback();
+});
+
+socket.on("message", (message) => {
+  const user = getUserById(socket.id);
+
+  io.to(user.room).emit("message", {
+    user: user.name,
+    text: message,
+  });
+});
+
+socket.on("disconnect", () => {
+  const user = removeUser(socket.id);
+
+  if (user) {
+    io.to(user.room).emit("message", {
       user: "System",
-      text: `welcome ${name} to ${room}.`,
+      text: `${user.name} just left ${user.room}.`,
     });
 
-    socket.broadcast.to(room).emit("message", {
-      user: "System",
-      text: `${name} just joined ${room}.`,
-    });
-
-    const roomUsers = getRoomUsers(room);
-    io.to(room).emit("userList", { roomUsers });
-
-    callback();
-  });
-
-  socket.on("message", (message) => {
-    const user = getUserById(socket.id);
-
-    if(user){
-      io.to(user.room).emit("message", {
-        user: user.name,
-        text: message,
-      });
-    }
-  });
-
-  socket.on("disconnect", () => {
-    const user = removeUser(socket.id);
-
-    if (user) {
-      io.to(user.room).emit("message", {
-        user: "System",
-        text: `${user.name} just left ${user.room}.`,
-      });
-
-      const roomUsers = getRoomUsers(user.room);
-      io.to(user.room).emit("userList", { roomUsers });
-    }
-  });
+    const roomUsers = getRoomUsers(user.room);
+    io.to(user.room).emit("userList", { roomUsers });
+  }
+});
 });
 
 httpServer.listen(port, () =>

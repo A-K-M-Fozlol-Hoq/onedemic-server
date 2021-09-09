@@ -19,7 +19,7 @@ const addUser = ({ id, name, room }) => {
 	};
 
 	users.push(user);
-
+	
 	return user;
 };
 
@@ -37,7 +37,7 @@ const getUserById = (id) => {
 };
 
 const getRoomUsers = (room) => {
-	const roomUsers = users.filter((user) => user.room === room);
+	const roomUsers = users.filter((user) => user.room.trim().toLowerCase() === room.trim().toLowerCase());
 	return roomUsers;
 };
 
